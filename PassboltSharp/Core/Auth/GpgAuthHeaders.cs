@@ -31,15 +31,15 @@ namespace PassboltSharp.Core.Auth
 
         private void Validate()
         {
-            if (_headers == null || !_headers.Any(h => h.Key.StartsWith("x-gpgauth")))
+            if (_headers == null || !_headers.Any(h => h.Key.StartsWith("X-GPGAuth")))
                 throw new Exception("No GPGAuth headers set.");
 
-            if (!_headers.TryGetValue("x-gpgauth-version", out var version) || version != "1.3.0")
+            if (!_headers.TryGetValue("X-GPGAuth-Version", out var version) || version != "1.3.0")
                 throw new Exception($"The version of GPGAuth provided by the server ({version}) is not supported.");
 
-            if (_headers.TryGetValue("x-gpgauth-error", out _))
+            if (_headers.TryGetValue("X-GPGAuth-Error", out _))
             {
-                if (_headers.TryGetValue("x-gpgauth-debug", out var debug))
+                if (_headers.TryGetValue("X-GPGAuth-Debug", out var debug))
                     throw new Exception(debug);
 
                 throw new Exception("There was an error during authentication. Enable debug mode for more information.");
@@ -52,25 +52,31 @@ namespace PassboltSharp.Core.Auth
             switch (_state)
             {
                 case GpgAuthState.Logout:
-                    ThrowIfHeaderNotEquals("x-gpgauth-authenticated", "false");
+                    ThrowIfHeaderNotEquals("X-GPGAuth-Authenticated", "false");
+                    break;
+                case GpgAuthState.VerifyServer:
+                    ThrowIfHeaderNotEquals("X-GPGAuth-Authenticated", "false");
+                    ThrowIfHeaderSet("X-GPGAuth-User-Token");
+                    ThrowIfHeaderNotSet("X-GPGAuth-Verify-Response");
+                    ThrowIfHeaderSet("X-GPGAuth-Refer");
                     break;
                 case GpgAuthState.DecryptToken: // "Stage 1"
-                    ThrowIfHeaderNotEquals("x-gpgauth-authenticated", "false");
-                    ThrowIfHeaderSet("x-gpgauth-user-token");
-                    ThrowIfHeaderNotSet("x-gpgauth-verify-response");
-                    ThrowIfHeaderSet("x-gpgauth-refer");
+                    ThrowIfHeaderNotEquals("X-GPGAuth-Authenticated", "false");
+                    ThrowIfHeaderSet("X-GPGAuth-User-Token");
+                    ThrowIfHeaderSet("X-GPGAuth-Verify-Response");
+                    ThrowIfHeaderSet("X-GPGAuth-Refer");
                     break;
                 case GpgAuthState.VerifyToken: // "Stage 2"
-                    ThrowIfHeaderNotEquals("x-gpgauth-authenticated", "false");
-                    ThrowIfHeaderNotSet("x-gpgauth-user-token");
-                    ThrowIfHeaderSet("x-gpgauth-verify-response");
-                    ThrowIfHeaderSet("x-gpgauth-refer");
+                    ThrowIfHeaderNotEquals("X-GPGAuth-Authenticated", "false");
+                    ThrowIfHeaderNotSet("X-GPGAuth-User-Token");
+                    ThrowIfHeaderSet("X-GPGAuth-Verify-Response");
+                    ThrowIfHeaderSet("X-GPGAuth-Refer");
                     break;
                 case GpgAuthState.Complete:
-                    ThrowIfHeaderNotEquals("x-gpgauth-authenticated", "true");
-                    ThrowIfHeaderSet("x-gpgauth-user-token");
-                    ThrowIfHeaderSet("x-gpgauth-verify-response");
-                    ThrowIfHeaderNotSet("x-gpgauth-refer");
+                    ThrowIfHeaderNotEquals("X-GPGAuth-Authenticated", "true");
+                    ThrowIfHeaderSet("X-GPGAuth-User-Token");
+                    ThrowIfHeaderSet("X-GPGAuth-Verify-Response");
+                    ThrowIfHeaderNotSet("X-GPGAuth-Refer");
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(_state), _state, null);
@@ -116,10 +122,12 @@ namespace PassboltSharp.Core.Auth
             {
                 case GpgAuthState.Logout:
                     return "logout";
-                case GpgAuthState.DecryptToken:
+                case GpgAuthState.VerifyServer:
                     return "stage0";
-                case GpgAuthState.VerifyToken:
+                case GpgAuthState.DecryptToken:
                     return "stage1";
+                case GpgAuthState.VerifyToken:
+                    return "stage2";
                 case GpgAuthState.Complete:
                     return "complete";
                 default:

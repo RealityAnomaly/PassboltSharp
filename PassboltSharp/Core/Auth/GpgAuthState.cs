@@ -3,8 +3,9 @@
     internal enum GpgAuthState
     {
         Logout,
-        DecryptToken, // "Stage 1"
-        VerifyToken, // "Stage 2"
+        VerifyServer, // stage 0
+        DecryptToken, // stage 1
+        VerifyToken, // stage 2
         Complete,
     }
 }

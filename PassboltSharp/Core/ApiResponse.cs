@@ -2,6 +2,7 @@
 using System.Net.Http;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace PassboltSharp.Core
 {
@@ -9,7 +10,9 @@ namespace PassboltSharp.Core
     {
         internal readonly HttpResponseMessage Response;
 
+        [JsonProperty("header")]
         internal ApiResponseHeader Header;
+        [JsonProperty("body")]
         internal T Body;
 
         private ApiResponse(HttpResponseMessage response)
@@ -28,7 +31,8 @@ namespace PassboltSharp.Core
         internal static async Task<ApiResponse<T>> BuildAsync(HttpResponseMessage response)
         {
             var obj = new ApiResponse<T>(response);
-            JsonConvert.PopulateObject(await response.Content.ReadAsStringAsync(), obj);
+            var content = await response.Content.ReadAsStringAsync();
+            JsonConvert.PopulateObject(content, obj);
 
             return obj;
         }

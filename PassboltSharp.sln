@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.28803.156
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PassboltSharp", "PassboltSharp\PassboltSharp.csproj", "{77ED1B35-BEFC-4CDB-ACBC-B607F6E7E74B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PassboltSharp", "PassboltSharp\PassboltSharp.csproj", "{77ED1B35-BEFC-4CDB-ACBC-B607F6E7E74B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PassboltCli", "PassboltCli\PassboltCli.csproj", "{E9AC2B80-79F5-4995-9A8D-468742453B64}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PassboltSharp.Tests", "PassboltSharp.Tests\PassboltSharp.Tests.csproj", "{AA14BC18-AA3D-46E5-87EF-F6B3644B3CA8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{77ED1B35-BEFC-4CDB-ACBC-B607F6E7E74B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{77ED1B35-BEFC-4CDB-ACBC-B607F6E7E74B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{77ED1B35-BEFC-4CDB-ACBC-B607F6E7E74B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E9AC2B80-79F5-4995-9A8D-468742453B64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E9AC2B80-79F5-4995-9A8D-468742453B64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E9AC2B80-79F5-4995-9A8D-468742453B64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E9AC2B80-79F5-4995-9A8D-468742453B64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AA14BC18-AA3D-46E5-87EF-F6B3644B3CA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA14BC18-AA3D-46E5-87EF-F6B3644B3CA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA14BC18-AA3D-46E5-87EF-F6B3644B3CA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA14BC18-AA3D-46E5-87EF-F6B3644B3CA8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

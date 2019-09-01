@@ -4,7 +4,7 @@ using System.Text;
 
 namespace PassboltSharp.Core.Auth
 {
-    internal enum MfaAuthProviderType
+    public enum MfaAuthProviderType
     {
         YubiKey,
         Totp

@@ -11,18 +11,18 @@ namespace PassboltSharp.Core
 {
     internal class ApiRequest
     {
-        private readonly ApiClient _client;
+        private readonly ApiSession _session;
         private readonly HttpRequestMessage _message;
 
-        private ApiRequest(ApiClient client, HttpRequestMessage message)
+        private ApiRequest(ApiSession session, HttpRequestMessage message)
         {
-            _client = client;
+            _session = session;
             _message = message;
         }
 
-        internal static ApiRequest Build(ApiClient client, Uri path, HttpMethod method)
+        internal static ApiRequest Build(ApiSession session, Uri path, HttpMethod method)
         {
-            return new ApiRequest(client, new HttpRequestMessage(method, path));
+            return new ApiRequest(session, new HttpRequestMessage(method, path));
         }
 
         internal ApiRequest WithJson(object value)
@@ -34,7 +34,7 @@ namespace PassboltSharp.Core
         /// <summary>
         /// Adds a CSRF (cross-site request forgery) token to the request headers.
         /// </summary>
-        internal ApiRequest WithCsrfToken() => WithHeader("X-CSRF-Token", _client.GetCsrfToken());
+        internal ApiRequest WithCsrfToken() => WithHeader("X-CSRF-Token", _session.GetCsrfToken());
 
         /// <summary>
         /// Adds a header to the request.
@@ -64,7 +64,7 @@ namespace PassboltSharp.Core
         /// <typeparam name="T">Type of the JSON object to deserialise.</typeparam>
         internal async Task<ApiResponse<T>> SendAsync<T>()
         {
-            var response = await _client.Client.SendAsync(_message);
+            var response = await _session.Client.SendAsync(_message);
             return await ApiResponse<T>.BuildAsync(response);
         }
 
@@ -73,7 +73,7 @@ namespace PassboltSharp.Core
         /// </summary>
         internal async Task<ApiResponse<JObject>> SendAsync()
         {
-            var response = await _client.Client.SendAsync(_message);
+            var response = await _session.Client.SendAsync(_message);
             return await ApiResponse<JObject>.BuildAsync(response);
         }
     }

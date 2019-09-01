@@ -1,5 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.Common;
+using System.Linq;
+using System.Net;
+using System.Security;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
@@ -12,7 +16,7 @@ namespace PassboltSharp.Core.Auth
     /// <summary>
     /// Implementation of the GpgAuth protocol.
     /// </summary>
-    internal class GpgAuth : IDisposable
+    public class GpgAuth : IDisposable
     {
         // API paths
         private const string URL_AUTH = "/auth";
@@ -27,25 +31,23 @@ namespace PassboltSharp.Core.Auth
         private readonly PGP _pgp;
 
         // State
-        private readonly ApiClient _client;
-        private readonly MfaAuth _mfa;
-        private GpgAuthState _state = GpgAuthState.Logout;
+        private readonly ApiSession _session;
+        public IList<MfaAuthProviderType> MfaProviders;
 
-        public GpgAuth(ApiClient client, GpgKey clientKey, GpgKey serverKey)
+        public GpgAuth(ApiSession session, GpgKey clientKey, GpgKey serverKey)
         {
             _pgp = new PGP();
             _clientKey = clientKey;
             _serverKey = serverKey;
 
-            _client = client;
-            _mfa = new MfaAuth(_client);
+            _session = session;
         }
 
         /// <summary>
         /// Authenticates the user using GpgAuth.
         /// </summary>
         /// <param name="passphrase">Passphrase protecting the user's private key.</param>
-        public async Task<GpgAuthSessionState> Authenticate(string passphrase)
+        public async Task<GpgAuthSessionState> Authenticate(SecureString passphrase)
         {
             try
             {
@@ -53,29 +55,39 @@ namespace PassboltSharp.Core.Auth
                 switch (result)
                 {
                     case GpgAuthSessionState.Invalid:
-                        _client.Logger?.LogDebug($"GpgAuth session invalid. Starting authentication with client fingerprint {_clientKey.Fingerprint}.");
+                        _session.Logger?.LogDebug($"GpgAuth session invalid. Starting authentication with client fingerprint {_clientKey.Fingerprint}.");
+
+                        try
+                        {
+                            // Verify the server's identity. (Stage 0)
+                            await VerifyServer();
+                        }
+                        catch (Exception)
+                        {
+                            return GpgAuthSessionState.Invalid;
+                        }
 
                         // Get and decrypt the token. (Stage 1)
                         var token = await GetAndDecryptToken(passphrase);
-                        _client.Logger?.LogDebug("GpgAuth Token decrypted successfully.");
+                        _session.Logger?.LogDebug("GpgAuth Token decrypted successfully.");
 
                         // Verify it with the server. (Stage 2)
                         await VerifyToken(token);
-                        _client.Logger?.LogDebug("Server accepts the GpgAuth token.");
+                        _session.Logger?.LogDebug("Server accepted the GpgAuth token.");
 
                         // Check to ensure the session is now valid
-                        var check = await Authenticate(passphrase);
+                        var check = await VerifySession();
                         if (check == GpgAuthSessionState.Invalid)
-                            throw new Exception("Server returned an invalid session. Halting authentication.");
+                            throw new Exception("Server returned an invalid session. Authentication failed.");
                         return check;
                     case GpgAuthSessionState.MfaRequired:
-                        _client.Logger?.LogDebug("Server returned GpgAuth MFA required.");
+                        _session.Logger?.LogDebug("Server returned GpgAuth MFA required.");
                         // MFA is required
                         // The user must call GetMfaChallenge and respond to it with VerifyMfaChallenge
                         // Then they can call Authenticate again and get the Valid state returned
                         return result;
                     case GpgAuthSessionState.Valid:
-                        _client.Logger?.LogDebug("Server GpgAuth session is valid.");
+                        _session.Logger?.LogDebug("Server GpgAuth session is valid.");
                         return result;
                     default:
                         throw new ArgumentOutOfRangeException();
@@ -83,19 +95,9 @@ namespace PassboltSharp.Core.Auth
             }
             catch (Exception e)
             {
-                _client.Logger?.LogError(e, e.Message);
+                _session.Logger?.LogError(e, e.Message);
                 return GpgAuthSessionState.Invalid;
             }
-        }
-
-        public async Task GetMfaChallenge()
-        {
-
-        }
-
-        public async Task VerifyMfaChallenge()
-        {
-
         }
 
         /// <summary>
@@ -103,24 +105,22 @@ namespace PassboltSharp.Core.Auth
         /// </summary>
         public async Task<bool> Logout()
         {
-            _state = GpgAuthState.Logout;
-
             try
             {
-                var result = await _client.Get(URL_LOGOUT).SendAsync();
+                var result = await _session.Get(URL_LOGOUT).SendAsync();
                 result.ThrowIfFailed();
-                _client.Logger?.LogInformation("Successfully logged out of the GpgAuth session.");
+                _session.Logger?.LogInformation("Successfully logged out of the GpgAuth session.");
 
                 return true;
             }
             catch (Exception e)
             {
-                _client.Logger?.LogError(e, "An exception occurred while logging out of the GpgAuth session.");
+                _session.Logger?.LogError(e, "An exception occurred while logging out of the GpgAuth session.");
                 return false;
             }
             finally
             {
-                _client.ResetCookies();
+                _session.ResetCookies();
             }
         }
 
@@ -141,11 +141,11 @@ namespace PassboltSharp.Core.Auth
                 }}
             };
 
-            var result = await _client.Post(URL_LOGIN, auth).SendAsync();
+            var result = await _session.Post(URL_LOGIN, auth).SendAsync();
             result.ThrowIfFailed();
 
-            GpgAuthHeaders.Validate(result.Response.Headers, GpgAuthState.DecryptToken);
-            var verifyToken = new GpgAuthToken(result.Response.Headers.GetValue("x-gpgauth-verify-response"));
+            GpgAuthHeaders.Validate(result.Response.Headers, GpgAuthState.VerifyServer);
+            var verifyToken = new GpgAuthToken(result.Response.Headers.GetValue("X-GPGAuth-Verify-Response"));
             if (verifyToken.Token != token.Token)
                 throw new Exception("The server failed to prove it can use the advertised OpenPGP key.");
         }
@@ -155,7 +155,7 @@ namespace PassboltSharp.Core.Auth
         /// </summary>
         /// <param name="passphrase">The passphrase to use to decrypt the client key.</param>
         /// <returns>The decrypted token.</returns>
-        private async Task<GpgAuthToken> GetAndDecryptToken(string passphrase)
+        private async Task<GpgAuthToken> GetAndDecryptToken(SecureString passphrase)
         {
             var auth = new Dictionary<string, dynamic>
             {
@@ -165,16 +165,16 @@ namespace PassboltSharp.Core.Auth
                 }}
             };
 
-            var result = await _client.Post(URL_LOGIN, auth).SendAsync();
-            GpgAuthHeaders.Validate(result.Response.Headers, _state);
+            var result = await _session.Post(URL_LOGIN, auth).SendAsync();
+            GpgAuthHeaders.Validate(result.Response.Headers, GpgAuthState.DecryptToken);
 
             // Decrypt the token
-            var encrypted = result.Response.Headers.GetValue("x-gpgauth-user-auth-token");
-            var decrypted = await _pgp.DecryptStringAsync(encrypted, _clientKey, passphrase);
+            var encrypted = result.Response.Headers.GetValue("X-GPGAuth-User-Auth-Token");
+            var decoded = WebUtility.UrlDecode(encrypted.Replace("\\+", " "));
+            var decrypted = await _pgp.DecryptStringAsync(decoded, _clientKey, passphrase);
 
             // Validate the token
             var token = new GpgAuthToken(decrypted);
-            _state = GpgAuthState.VerifyToken;
             return token;
         }
 
@@ -193,28 +193,28 @@ namespace PassboltSharp.Core.Auth
                 }}
             };
 
-            var result = await _client.Post(URL_LOGIN, auth).SendAsync();
-            GpgAuthHeaders.Validate(result.Response.Headers, _state);
-
-            // We're done, nice!
-            _state = GpgAuthState.Complete;
+            var result = await _session.Post(URL_LOGIN, auth).SendAsync();
+            GpgAuthHeaders.Validate(result.Response.Headers, GpgAuthState.Complete);
         }
 
-        private async Task<GpgAuthSessionState> VerifySession()
+        public async Task<GpgAuthSessionState> VerifySession()
         {
-            if (_client.Cookies.Count == 0)
+            if (_session.Cookies.Count == 0)
                 return GpgAuthSessionState.Invalid;
 
             try
             {
-                var result = await _client.Get(URL_CHECKSESSION).SendAsync();
-                _state = GpgAuthState.Complete;
+                var result = await _session.Get(URL_CHECKSESSION).SendAsync();
 
-                return _mfa.IsMfaRequired(result) ? GpgAuthSessionState.MfaRequired : GpgAuthSessionState.Valid;
+                if (!MfaAuth.IsMfaRequired(result))
+                    return GpgAuthSessionState.Valid;
+
+                MfaProviders = MfaAuth.GetProviderTypesFrom(result);
+                return GpgAuthSessionState.MfaRequired;
             }
             catch (Exception e)
             {
-                _client.Logger?.LogError(e, e.Message);
+                _session.Logger?.LogError(e, e.Message);
                 return GpgAuthSessionState.Invalid;
             }
         }

@@ -5,3 +5,6 @@
 /PassboltSharp/obj
 /PassboltSharp/bin/Debug
 /.vs
+/PassboltCli/bin/Debug/netcoreapp2.2
+/PassboltCli/obj
+/PassboltSharp.Tests/obj
